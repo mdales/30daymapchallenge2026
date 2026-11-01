@@ -3,6 +3,7 @@ open Claudius_sdl
 
 module Proj = Proj_c
 
+
 let crs = Proj.Transformation.of_string ~src:"EPSG:4326" "EPSG:27700"
     (* |> Proj.Transformation.normalize_for_visualization *)
 
@@ -43,15 +44,32 @@ let boot s =
     and f_screen_height = float_of_int screen_height in
 
     let grid = generate_grid () in
+
+    let data = Geojson.of_file "output.geojson" in
+    let occs = List.filter_map (fun f ->
+        let g = Feature.geometry f in
+        match g with
+        | Feature.Point coord -> Some (coord.longitude, coord.latitude)
+        | _ -> None
+    ) (Geojson.features data) in
+    let occsp = List.map wgs84_to_bng occs in
+    let occspp = List.map (fun (x, y) ->
+        let px = int_of_float (((x -. min_x) *. f_screen_width) /. width) in
+        let py = int_of_float ((y -. min_y) *. f_screen_height /. height) in
+        px, (screen_height - py)
+    ) occsp in
+    let occsppp = List.map (fun (px, py) -> Primitives.Pixel ({x=px; y=py}, 0))  occspp in
+
+
     let projected_grid = List.map wgs84_to_bng grid in
     let points = List.map (fun (x, y) ->
         let px = int_of_float (((x -. min_x) *. f_screen_width) /. width) in
         let py = int_of_float ((y -. min_y) *. f_screen_height /. height) in
-        px, py
+        px, (screen_height - py)
     ) projected_grid in
-    let primitives = List.map (fun (px, py) -> Primitives.Pixel ({x=px; y=py}, 0))  points in
+    let primitives = List.map (fun (px, py) -> Primitives.Pixel ({x=px; y=py}, 10))  points in
     let fb = Framebuffer.init (Screen.dimensions s) (fun _ _ -> 15) in
-    Framebuffer.render fb primitives;
+    Framebuffer.render fb (primitives @ occsppp);
     fb
 
 let tick _t _s fb _i =
