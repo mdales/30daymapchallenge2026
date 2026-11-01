@@ -34,6 +34,10 @@ let wgs84_to_bng (lng, lat) =
 
 
 let boot s =
+    let p = Screen.palette s in
+    let fb = Framebuffer.init (Screen.dimensions s) (fun _ _ -> 0) in
+    let pmax = (Palette.size p) - 1 in
+
     let min_x, min_y = wgs84_to_bng (-3.77, 53.19)
     and max_x, max_y = wgs84_to_bng (-2.90, 53.71) in
     let width = max_x -. min_x
@@ -58,7 +62,7 @@ let boot s =
         let py = int_of_float ((y -. min_y) *. f_screen_height /. height) in
         px, (screen_height - py)
     ) occsp in
-    let occsppp = List.map (fun (px, py) -> Primitives.Pixel ({x=px; y=py}, 0))  occspp in
+    (* let occsppp = List.map (fun (px, py) -> Primitives.Pixel ({x=px; y=py}, pmax))  occspp in *)
 
 
     let projected_grid = List.map wgs84_to_bng grid in
@@ -67,15 +71,22 @@ let boot s =
         let py = int_of_float ((y -. min_y) *. f_screen_height /. height) in
         px, (screen_height - py)
     ) projected_grid in
-    let primitives = List.map (fun (px, py) -> Primitives.Pixel ({x=px; y=py}, 10))  points in
-    let fb = Framebuffer.init (Screen.dimensions s) (fun _ _ -> 15) in
-    Framebuffer.render fb (primitives @ occsppp);
+    let primitives = List.map (fun (px, py) -> Primitives.Pixel ({x=px; y=py}, (pmax / 2)))  points in
+    Framebuffer.render fb (primitives);
+    List.iter (fun (x, y) ->
+        match Framebuffer.pixel_read x y fb with
+        | None -> ()
+        | Some v -> (
+            let nv = if v = 0 then (pmax / 2) else v + 1 in
+            Framebuffer.pixel_write x y nv fb
+        )
+    ) occspp;
     fb
 
 let tick _t _s fb _i =
     fb
 
 let () =
-    Palette.generate_mono_palette 16 |>
-    Screen.create ~scale:1 "Day 1" (800, 500) |>
+    (Palette.of_list (List.rev (Palette.to_list (Palette.generate_mono_palette 256)))) |>
+    Screen.create ~scale:1 "Day 1" (800, 480) |>
     Base.run ~boot tick
